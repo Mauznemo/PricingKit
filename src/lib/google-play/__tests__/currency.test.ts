@@ -10,6 +10,7 @@ import {
   APPLE_BILLED_IN_USD,
 } from './fixtures/ppp-snapshot';
 import type { Money } from '../types';
+import { LOCAL_CURRENCIES } from '../../conversion-indexes/ppp';
 import { getNetflixMultiplier } from '../../conversion-indexes/netflix';
 
 describe('calculateRegionalPrice — direct strategy', () => {
@@ -507,5 +508,20 @@ describe('calculateNewPrice', () => {
       { type: 'percentage', value: 10 }
     );
     expect(result.currencyCode).toBe('GBP');
+  });
+});
+
+describe('live PPP multiplier bounds', () => {
+  it('keeps a redenominated currency at the floor instead of near zero', () => {
+    const local = LOCAL_CURRENCIES.SL;
+    // PPP factor in new leones, market rate in old ones: about 1000x apart
+    const ppp = {
+      US: { pppMultiplier: 1, pppConversionFactor: 1, marketExchangeRate: 1, minPrice: 0, suggestedRounding: 0.99, source: 'world-bank' as const },
+      SL: { pppMultiplier: 0.3, pppConversionFactor: 5, marketExchangeRate: 22000, minPrice: 0, suggestedRounding: 0.99, source: 'world-bank' as const },
+    };
+    const rates = { base: 'USD', fetchedAt: '2026-10-25', rates: { USD: 1, [local]: 22000 } };
+    const result = calculateRegionalPrice(49.99, 'SL', 'ppp', 'none', undefined, ppp, { SL: 'USD' }, rates, 'USD', 'US');
+    expect(result.multiplier).toBeCloseTo(0.1);
+    expect(result.rawPrice).toBeCloseTo(5.0, 1);
   });
 });

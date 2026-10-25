@@ -69,6 +69,18 @@ function getExchangeRate(
 }
 
 
+// The bounds every index keeps its multipliers in. The live World Bank data
+// needs them too: for a currency that was redenominated (new leone, bolívar)
+// the PPP factor and the market rate can be a thousand times apart, which
+// made prices of 0.99 for a yearly plan.
+const MIN_MULTIPLIER = 0.1;
+const MAX_MULTIPLIER = 2.0;
+
+function clampMultiplier(multiplier: number): number {
+  if (!Number.isFinite(multiplier)) return 1.0;
+  return Math.min(MAX_MULTIPLIER, Math.max(MIN_MULTIPLIER, multiplier));
+}
+
 // Get the actual local currency for a region (what World Bank PPP is based on)
 function getLocalCurrencyForRegion(regionCode: string): string {
   return LOCAL_CURRENCIES[regionCode] || 'USD';
@@ -308,7 +320,7 @@ export function calculateRegionalPrice(
           // multiplier denominator; keep the live OER rate for the final output
           // conversion so the displayed price tracks today's market.
           const rawRealMultiplier = pppConversionFactor / localExchangeRate;
-          effectiveMultiplier = rawRealMultiplier / baseRealMultiplier;
+          effectiveMultiplier = clampMultiplier(rawRealMultiplier / baseRealMultiplier);
           calculatedPrice = baseUsdPrice * effectiveMultiplier * exchangeRate;
           multiplierSource = dynamicEntry?.source ?? 'world-bank';
         } else {
@@ -325,7 +337,7 @@ export function calculateRegionalPrice(
             const pppPriceInUsd = pppPriceInLocal / localExchangeRate;
             const rawRealMultiplier = pppPriceInUsd / baseUsdPrice;
             
-            effectiveMultiplier = rawRealMultiplier / baseRealMultiplier;
+            effectiveMultiplier = clampMultiplier(rawRealMultiplier / baseRealMultiplier);
 
             // For hyperinflation countries where PPP produces HIGHER prices than base,
             // use a low default multiplier to make apps affordable.
