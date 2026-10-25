@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { cookieOptions } from '@/lib/cookie-options';
 
 const COOKIE_NAME = 'exchange_rates_api_key';
 
@@ -48,13 +49,7 @@ export async function POST(request: Request) {
 
     // Save the API key in a cookie (httpOnly for security)
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_NAME, apiKey, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-      path: '/',
-    });
+    cookieStore.set(COOKIE_NAME, apiKey, await cookieOptions());
 
     return NextResponse.json({
       success: true,

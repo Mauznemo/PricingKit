@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { cookieOptions } from '@/lib/cookie-options';
 import {
   validateAppleCredentials,
   createAppleSession,
@@ -11,7 +12,6 @@ import type { AppleConnectCredentials } from '@/lib/apple-connect/types';
 
 const SESSION_COOKIE = 'apple_session';
 const BUNDLE_ID_COOKIE = 'apple_bundle_id';
-const COOKIE_MAX_AGE = 24 * 60 * 60; // 24 hours
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,13 +58,7 @@ export async function POST(request: NextRequest) {
     const sessionId = await createAppleSession(credentials);
 
     const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE, sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: COOKIE_MAX_AGE,
-      path: '/',
-    });
+    cookieStore.set(SESSION_COOKIE, sessionId, await cookieOptions());
     cookieStore.delete(BUNDLE_ID_COOKIE);
 
     return NextResponse.json({
@@ -95,6 +89,11 @@ export async function GET() {
     if (!credentials) {
       return NextResponse.json({ authenticated: false });
     }
+
+    // Renew the cookies, so the year counts from the last visit
+    const options = await cookieOptions();
+    cookieStore.set(SESSION_COOKIE, sessionId, options);
+    if (bundleId) cookieStore.set(BUNDLE_ID_COOKIE, bundleId, options);
 
     return NextResponse.json({
       authenticated: true,

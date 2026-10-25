@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { cookieOptions } from '@/lib/cookie-options';
 import {
   googlePlayFetch,
   getSessionCredentials,
@@ -8,7 +9,6 @@ import { GOOGLE_PRICING_WRITE_DENIED_ERROR } from '@/lib/google-play/errors';
 
 const GOOGLE_SESSION_COOKIE = 'gplay_session';
 const GOOGLE_PACKAGE_NAME_COOKIE = 'gplay_package_name';
-const COOKIE_MAX_AGE = 24 * 60 * 60;
 
 interface ProbeListResp<T> {
   oneTimeProducts?: T[];
@@ -150,13 +150,7 @@ export async function POST(request: NextRequest) {
     console.warn('Write-permission probe inconclusive:', error.code, error.message);
   }
 
-  cookieStore.set(GOOGLE_PACKAGE_NAME_COOKIE, packageName, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: COOKIE_MAX_AGE,
-    path: '/',
-  });
+  cookieStore.set(GOOGLE_PACKAGE_NAME_COOKIE, packageName, await cookieOptions());
 
   return NextResponse.json({ ok: true, packageName });
 }

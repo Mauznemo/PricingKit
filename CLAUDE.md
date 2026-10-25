@@ -51,7 +51,7 @@ npm test -- <path>   # Run specific test file(s)
 ### Data Flow & State Management
 
 **No database** - stateless architecture:
-- Session credentials stored encrypted in HTTP-only cookies (24-hour expiry)
+- Session credentials stored encrypted in HTTP-only cookies (one year, renewed on every auth check). All cookie options come from `cookieOptions()` in `/lib/cookie-options.ts`
 - Exchange rates cached to disk (`.exchange-rates.json`, 6-hour TTL)
 - Dev sessions persisted to `.sessions.json`
 - Client auth state persisted to localStorage via Zustand
@@ -87,6 +87,7 @@ Touchpoints (all required, in order):
 ```
 ENCRYPTION_KEY           # For encrypting credentials in cookies (recommended)
 OPEN_EXCHANGE_RATES_APP_ID  # API key for currency conversion
+COOKIE_SECURE            # true|false, default: Secure only for HTTPS requests
 ```
 
 ## Path Alias

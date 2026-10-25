@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { cookieOptions } from '@/lib/cookie-options';
 import {
   validateServiceAccountJson,
   createSession,
@@ -21,7 +22,6 @@ interface ProbeProduct {
 
 const SESSION_COOKIE = 'gplay_session';
 const PACKAGE_NAME_COOKIE = 'gplay_package_name';
-const COOKIE_MAX_AGE = 24 * 60 * 60; // 24 hours
 
 export async function POST(request: NextRequest) {
   try {
@@ -179,21 +179,9 @@ export async function POST(request: NextRequest) {
 
     const cookieStore = await cookies();
 
-    cookieStore.set(SESSION_COOKIE, sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: COOKIE_MAX_AGE,
-      path: '/',
-    });
+    cookieStore.set(SESSION_COOKIE, sessionId, await cookieOptions());
 
-    cookieStore.set(PACKAGE_NAME_COOKIE, packageName, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: COOKIE_MAX_AGE,
-      path: '/',
-    });
+    cookieStore.set(PACKAGE_NAME_COOKIE, packageName, await cookieOptions());
 
     return NextResponse.json({
       success: true,
@@ -230,6 +218,11 @@ export async function GET() {
     if (!credentials) {
       return NextResponse.json({ authenticated: false });
     }
+
+    // Renew the cookies, so the year counts from the last visit
+    const options = await cookieOptions();
+    cookieStore.set(SESSION_COOKIE, sessionId, options);
+    cookieStore.set(PACKAGE_NAME_COOKIE, packageName, options);
 
     return NextResponse.json({
       authenticated: true,

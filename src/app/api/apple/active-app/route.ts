@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { cookieOptions } from '@/lib/cookie-options';
 import {
   appleApiRequest,
   AppleApiError,
@@ -12,7 +13,6 @@ import type {
 
 const APPLE_SESSION_COOKIE = 'apple_session';
 const APPLE_BUNDLE_ID_COOKIE = 'apple_bundle_id';
-const COOKIE_MAX_AGE = 24 * 60 * 60;
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -85,13 +85,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  cookieStore.set(APPLE_BUNDLE_ID_COOKIE, bundleId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: COOKIE_MAX_AGE,
-    path: '/',
-  });
+  cookieStore.set(APPLE_BUNDLE_ID_COOKIE, bundleId, await cookieOptions());
 
   return NextResponse.json({ ok: true, bundleId });
 }

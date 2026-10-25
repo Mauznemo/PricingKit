@@ -98,13 +98,16 @@ ENCRYPTION_KEY=your-secure-random-string
 
 # Open Exchange Rates API key (for currency conversion)
 OPEN_EXCHANGE_RATES_APP_ID=your-api-key
+
+# Force the Secure flag on cookies on or off (default: on for HTTPS requests)
+COOKIE_SECURE=
 ```
 
 ## Security
 
 - Credentials are encrypted and stored in HTTP-only cookies
 - Credentials are never persisted on the server
-- Sessions expire after 24 hours
+- Sessions last a year from the last visit, so the keys need not be entered again
 
 ## License
 
