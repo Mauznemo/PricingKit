@@ -112,3 +112,12 @@ describe('getSupportedAppleTerritories', () => {
     }
   });
 });
+
+describe('billing currencies', () => {
+  it('has the territories Apple moved to the euro in EUR', () => {
+    // Apple bills these in EUR (checked against App Store Connect, October 2026)
+    for (const alpha3 of ['BGR', 'SRB', 'BIH']) {
+      expect(APPLE_TERRITORIES.find((t) => t.alpha3 === alpha3)?.currency).toBe('EUR');
+    }
+  });
+});

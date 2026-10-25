@@ -330,14 +330,18 @@ export function AppleSubscriptionBulkPricingModal({
     return allTerritories.map((t) => t.alpha2);
   }, [allTerritories]);
 
-  // Build actual currencies map from territories
+  // Build actual currencies map from territories. The currency of an existing
+  // price wins: it is what Apple bills now, while the territory list can be
+  // out of date (Bulgaria moved from BGN to EUR in 2026, and a price worked out
+  // in leva was then matched to Apple's euro price points).
   const actualCurrencies = useMemo(() => {
     const currencies: Record<string, string> = {};
     for (const territory of allTerritories) {
-      currencies[territory.alpha2] = territory.currency;
+      currencies[territory.alpha2] =
+        subscription.prices?.[territory.alpha2]?.currency || territory.currency;
     }
     return currencies;
-  }, [allTerritories]);
+  }, [allTerritories, subscription.prices]);
 
   // Calculate preview prices with Apple tier matching
   const previewPrices = useMemo((): PreviewPrice[] => {
@@ -413,8 +417,13 @@ export function AppleSubscriptionBulkPricingModal({
   }, [previewPrices]);
 
   const overrideRegions = useMemo(
-    () => allTerritories.map((t) => ({ code: t.alpha2, name: t.name, currency: t.currency })),
-    [allTerritories]
+    () =>
+      allTerritories.map((t) => ({
+        code: t.alpha2,
+        name: t.name,
+        currency: actualCurrencies[t.alpha2] ?? t.currency,
+      })),
+    [allTerritories, actualCurrencies]
   );
   const sortedPreviewPrices = useMemo(() => {
     const items = [...previewPrices];
