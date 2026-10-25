@@ -13,6 +13,8 @@ import { Header } from '@/components/layout';
 import { AppleSubscriptionPricingEditor } from '@/components/subscriptions/apple-subscription-pricing-editor';
 import { formatMoney, parseMoney } from '@/lib/google-play/types';
 import type { AppleProductPrice } from '@/lib/apple-connect/types';
+import { DownloadPricesButton } from '@/components/pricing/download-prices-button';
+import { websitePriceFileName } from '@/lib/website-prices';
 
 interface AppleSubscriptionResponse {
   subscription: {
@@ -24,6 +26,7 @@ interface AppleSubscriptionResponse {
     groupId?: string;
     groupName?: string;
     prices: Record<string, AppleProductPrice>;
+    scheduledPrices?: Record<string, AppleProductPrice>;
     localizations?: Record<string, { name: string; description?: string }>;
   };
 }
@@ -143,6 +146,13 @@ export default function AppleSubscriptionDetailPage({
               </>
             )}
           </div>
+          {subscription && (
+            <DownloadPricesButton
+              prices={subscription.prices}
+              scheduledPrices={subscription.scheduledPrices}
+              fileName={websitePriceFileName(subscription.productId, subscription.period)}
+            />
+          )}
         </div>
 
         {isLoading ? (

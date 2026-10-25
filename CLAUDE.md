@@ -76,6 +76,7 @@ npm test -- <path>   # Run specific test file(s)
 
 ### Manual prices and price files
 - **Manual prices:** `RegionOverridesSection` + `useRegionOverrides` (`/components/pricing/region-overrides.tsx`) sit above the regions table of all three bulk modals. An override replaces the strategy's price for its region (snapped to the closest tier on Apple) and is kept in localStorage per product
+- **Website price files:** `DownloadPricesButton` on the Apple product and subscription pages saves `toWebsitePrices()` (`/lib/website-prices.ts`): the `prices` as App Store Connect keys them (alpha-2 for subscriptions, alpha-3 for in-app purchases), with only `territoryCode`, `currency`, `customerPrice`
 
 ### Adding a new pricing strategy
 Touchpoints (all required, in order):

@@ -13,6 +13,8 @@ import { Header } from '@/components/layout';
 import { PricingEditor } from '@/components/products/pricing-editor';
 import { formatMoney, parseMoney, type InAppProduct } from '@/lib/google-play/types';
 import type { RawAppleProduct } from '@/types/api';
+import { DownloadPricesButton } from '@/components/pricing/download-prices-button';
+import { websitePriceFileName } from '@/lib/website-prices';
 
 function formatAppleProductType(type?: string): string {
   if (!type) return 'Unknown';
@@ -127,6 +129,12 @@ export default function AppleProductDetailPage({
               </>
             )}
           </div>
+          {appleProduct && (
+            <DownloadPricesButton
+              prices={appleProduct.prices}
+              fileName={websitePriceFileName(appleProduct.productId)}
+            />
+          )}
         </div>
 
         {isLoading ? (
