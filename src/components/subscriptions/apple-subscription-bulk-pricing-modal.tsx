@@ -172,7 +172,7 @@ export function AppleSubscriptionBulkPricingModal({
   const [startDate, setStartDate] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+  const [selectedForInputs, setSelectedForInputs] = useState<string | null>(null);
   const [pppFetched, setPppFetched] = useState(false);
   const [exchangeRatesFetched, setExchangeRatesFetched] = useState(false);
   const [updateSummary, setUpdateSummary] = useState<{
@@ -482,13 +482,16 @@ export function AppleSubscriptionBulkPricingModal({
     [sortedPreviewPrices, regionQuery]
   );
 
-  // Auto-select regions where the target price deviates from current price
+  // Auto-select regions where the target price deviates from current price.
+  // Done again whenever an input changes, so a region whose price only changed
+  // with a later edit (the base price typed after opening) is selected too.
+  const selectionInputs = JSON.stringify([basePriceNum, baseRegion, strategy, rounding, overrides]);
   useEffect(() => {
     // Only run if modal is open, we haven't initialized yet, and data fetching is COMPLETE
     // This prevents initializing selection with stale/default prices before PPP data loads
     const isFetchingComplete = pppFetched && exchangeRatesFetched;
 
-    if (open && !hasInitializedSelection && previewPrices.length > 0 && isFetchingComplete) {
+    if (open && selectedForInputs !== selectionInputs && previewPrices.length > 0 && isFetchingComplete) {
       // Safety check: ensure previewPrices first item matches a territory we expect
       const firstPreview = previewPrices[0];
       const belongsToCurrentSubscription = allTerritories.some(t => t.alpha2 === firstPreview.territoryCode);
@@ -509,9 +512,9 @@ export function AppleSubscriptionBulkPricingModal({
       });
 
       setSelectedRegions(newSelected);
-      setHasInitializedSelection(true);
+      setSelectedForInputs(selectionInputs);
     }
-  }, [open, previewPrices, hasInitializedSelection, allTerritories, pppFetched, exchangeRatesFetched]);
+  }, [open, previewPrices, selectedForInputs, selectionInputs, allTerritories, pppFetched, exchangeRatesFetched]);
 
   const validSelectedCount = useMemo(() => {
     return previewPrices.filter(p => selectedRegions.has(p.territoryCode) && !p.noTierData && p.tier).length;
@@ -722,7 +725,7 @@ export function AppleSubscriptionBulkPricingModal({
       setStrategy('ppp');
       setRounding('nearest-tier');
       setUserTouchedRegion(false);
-      setHasInitializedSelection(false);
+      setSelectedForInputs(null);
       if (isApproved) {
         setStartDate(getEarliestEffectiveDate());
       } else {

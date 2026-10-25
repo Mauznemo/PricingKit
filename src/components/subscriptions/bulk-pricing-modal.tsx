@@ -128,7 +128,7 @@ export function SubscriptionBulkPricingModal({
   const updateMutation = useUpdateBasePlanPrices('google');
   const [isApplying, setIsApplying] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+  const [selectedForInputs, setSelectedForInputs] = useState<string | null>(null);
   const [pppFetched, setPppFetched] = useState(false);
   const [exchangeRatesFetched, setExchangeRatesFetched] = useState(false);
   const [updateSummary, setUpdateSummary] = useState<{
@@ -382,13 +382,16 @@ export function SubscriptionBulkPricingModal({
     [sortedPreviewPrices, regionQuery]
   );
 
-  // Auto-select regions where the target price deviates from current price
+  // Auto-select regions where the target price deviates from current price.
+  // Done again whenever an input changes, so a region whose price only changed
+  // with a later edit (the base price typed after opening) is selected too.
+  const selectionInputs = JSON.stringify([basePriceNum, baseRegion, strategy, rounding, overrides]);
   useEffect(() => {
     // Only run if modal is open, we haven't initialized yet, and data fetching is COMPLETE
     // This prevents initializing selection with stale/default prices before PPP data loads
     const isFetchingComplete = pppFetched && exchangeRatesFetched;
 
-    if (open && !hasInitializedSelection && previewPrices.length > 0 && isFetchingComplete) {
+    if (open && selectedForInputs !== selectionInputs && previewPrices.length > 0 && isFetchingComplete) {
       // Safety check: ensure previewPrices first item matches a region we expect
       const firstPreview = previewPrices[0];
       const belongsToCurrentSubscription = allRegions.some(r => r.code === firstPreview.regionCode);
@@ -417,9 +420,9 @@ export function SubscriptionBulkPricingModal({
       });
 
       setSelectedRegions(newSelected);
-      setHasInitializedSelection(true);
+      setSelectedForInputs(selectionInputs);
     }
-  }, [open, previewPrices, hasInitializedSelection, allRegions, pppFetched, exchangeRatesFetched, getCurrentPrice]);
+  }, [open, previewPrices, selectedForInputs, selectionInputs, allRegions, pppFetched, exchangeRatesFetched, getCurrentPrice]);
 
   // Handle sorting
   const requestSort = (key: string) => {
@@ -558,7 +561,7 @@ export function SubscriptionBulkPricingModal({
       setBasePrice(initialPrice);
       setStrategy('ppp');
       setRounding('nearest-99');
-      setHasInitializedSelection(false);
+      setSelectedForInputs(null);
     }
     onOpenChange(newOpen);
   };

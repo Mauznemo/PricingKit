@@ -238,7 +238,7 @@ export function BulkPricingModal({
   const [regionQuery, setRegionQuery] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+  const [selectedForInputs, setSelectedForInputs] = useState<string | null>(null);
   const [updateSummary, setUpdateSummary] = useState<{
     changing: Array<{ name: string; old: string; new: string; regionCode: string; isRequired: boolean }>;
     staying: Array<{ name: string; price: string; regionCode: string }>;
@@ -561,13 +561,16 @@ export function BulkPricingModal({
     [sortedPreviewPrices, regionQuery]
   );
 
-  // Auto-select regions where the target price deviates from current price
+  // Auto-select regions where the target price deviates from current price.
+  // Done again whenever an input changes, so a region whose price only changed
+  // with a later edit (the base price typed after opening) is selected too.
+  const selectionInputs = JSON.stringify([basePriceNum, baseRegion, strategy, rounding, overrides]);
   useEffect(() => {
     // Only run if modal is open, we haven't initialized yet, and data fetching is COMPLETE
     // This prevents initializing selection with stale/default prices before PPP data loads
     const isFetchingComplete = pppFetched && exchangeRatesFetched;
     
-    if (open && !hasInitializedSelection && previewPrices.length > 0 && isFetchingComplete) {
+    if (open && selectedForInputs !== selectionInputs && previewPrices.length > 0 && isFetchingComplete) {
       // Safety check: ensure previewPrices first item matches a region we expect for this product
       const firstPreview = previewPrices[0];
       const belongsToCurrentProduct = allRegions.some(r => r.code === firstPreview.regionCode);
@@ -599,9 +602,9 @@ export function BulkPricingModal({
       });
 
       setSelectedRegions(newSelected);
-      setHasInitializedSelection(true);
+      setSelectedForInputs(selectionInputs);
     }
-  }, [open, previewPrices, hasInitializedSelection, platform, product, allRegions, pppFetched, exchangeRatesFetched, getCurrentPrice, baseRegion]);
+  }, [open, previewPrices, selectedForInputs, selectionInputs, platform, product, allRegions, pppFetched, exchangeRatesFetched, getCurrentPrice, baseRegion]);
 
   // Handle region selection
   const toggleRegion = (regionCode: string) => {
@@ -767,7 +770,7 @@ export function BulkPricingModal({
       setBasePrice(initialPrice);
       setStrategy('ppp');
       setRounding(platform === 'apple' ? 'nearest-tier' : 'nearest-99');
-      setHasInitializedSelection(false);
+      setSelectedForInputs(null);
       // Selected regions will be initialized by the useEffect once previewPrices is calculated
       // PPP data will be fetched by the useEffect
     }
