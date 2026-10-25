@@ -3,6 +3,7 @@ import {
   PRICING_INDEX,
   DEFAULT_PRICING_INDEX_ENTRY,
   LOCAL_CURRENCIES,
+  isPlausiblePppMultiplier,
   getPricingIndexEntry,
 } from '../ppp';
 
@@ -113,5 +114,27 @@ describe('cross-index consistency', () => {
       (code) => !(code in LOCAL_CURRENCIES)
     );
     expect(missing, `regions missing currency: ${missing.join(', ')}`).toEqual([]);
+  });
+});
+
+describe('isPlausiblePppMultiplier', () => {
+  it('takes a live value near the static one', () => {
+    expect(isPlausiblePppMultiplier(0.48, 0.46)).toBe(true);
+    expect(isPlausiblePppMultiplier(0.3, 0.46)).toBe(true);
+  });
+
+  it('refuses a value a redenomination threw off', () => {
+    expect(isPlausiblePppMultiplier(0.0003, 0.1)).toBe(false); // new leone vs old
+    expect(isPlausiblePppMultiplier(21, 2.0)).toBe(false); // Somalia
+  });
+
+  it('takes any value for a region without a static one', () => {
+    expect(isPlausiblePppMultiplier(0.7, undefined)).toBe(true);
+  });
+});
+
+describe('euro countries', () => {
+  it('reads Bulgaria in euros, as the World Bank does since its switch', () => {
+    expect(LOCAL_CURRENCIES.BG).toBe('EUR');
   });
 });

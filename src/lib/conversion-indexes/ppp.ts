@@ -235,6 +235,20 @@ export function getPricingIndexEntry(regionCode: string): PricingIndexEntry {
   return PRICING_INDEX[regionCode] || { ...DEFAULT_PRICING_INDEX_ENTRY, regionCode };
 }
 
+/**
+ * Whether a live World Bank multiplier can be believed, compared with the
+ * static one of the same region. Where a currency was redenominated or
+ * replaced (new leone, bolívar, ZiG, the lev by the euro), the PPP factor and
+ * the market rate can be in different currencies and land 10 or 1000 times
+ * off. Those regions keep their static multiplier.
+ */
+export function isPlausiblePppMultiplier(live: number, staticMultiplier: number | undefined): boolean {
+  if (!Number.isFinite(live) || live <= 0) return false;
+  if (staticMultiplier === undefined) return true;
+  const ratio = live / staticMultiplier;
+  return ratio >= 0.5 && ratio <= 2;
+}
+
 // Map of region codes to their actual local currencies (what World Bank PPP data is based on)
 // This may differ from what Apple/Google uses for billing
 export const LOCAL_CURRENCIES: Record<string, string> = {
@@ -250,7 +264,7 @@ export const LOCAL_CURRENCIES: Record<string, string> = {
   // Europe
   GB: 'GBP', DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', NL: 'EUR', BE: 'EUR', AT: 'EUR',
   CH: 'CHF', SE: 'SEK', NO: 'NOK', DK: 'DKK', FI: 'EUR', PL: 'PLN', CZ: 'CZK', HU: 'HUF',
-  RO: 'RON', BG: 'BGN', HR: 'EUR', SK: 'EUR', SI: 'EUR', LT: 'EUR', LV: 'EUR', EE: 'EUR',
+  RO: 'RON', BG: 'EUR', HR: 'EUR', SK: 'EUR', SI: 'EUR', LT: 'EUR', LV: 'EUR', EE: 'EUR',
   IE: 'EUR', PT: 'EUR', GR: 'EUR', LU: 'EUR', MT: 'EUR', CY: 'EUR', IS: 'ISK',
   RS: 'RSD', BA: 'BAM', MK: 'MKD', AL: 'ALL', ME: 'EUR', XK: 'EUR', MD: 'MDL',
   UA: 'UAH', BY: 'BYN', RU: 'RUB',

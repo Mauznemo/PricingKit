@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getPPPMultipliers } from '@/lib/world-bank/ppp';
-import { PRICING_INDEX, DEFAULT_PRICING_INDEX_ENTRY, LOCAL_CURRENCIES } from '@/lib/conversion-indexes/ppp';
+import {
+  PRICING_INDEX,
+  DEFAULT_PRICING_INDEX_ENTRY,
+  LOCAL_CURRENCIES,
+  isPlausiblePppMultiplier,
+} from '@/lib/conversion-indexes/ppp';
 import { BIG_MAC_INDEX, DEFAULT_BIG_MAC_MULTIPLIER } from '@/lib/conversion-indexes/big-mac';
 import { NETFLIX_PRICE_INDEX, DEFAULT_NETFLIX_MULTIPLIER } from '@/lib/conversion-indexes/netflix';
 import { getExchangeRates } from '@/lib/exchange-rates/client';
@@ -125,6 +130,13 @@ export async function GET(request: Request) {
       let realPPPMultiplier = multiplier; // Fallback to US-relative
       if (marketRate && conversionFactor) {
         realPPPMultiplier = conversionFactor / marketRate;
+        // Factor and rate in different currencies: keep the static entry
+        if (!isPlausiblePppMultiplier(realPPPMultiplier, PRICING_INDEX[regionCode]?.pppMultiplier)) {
+          console.warn(
+            `[PPP] ${regionCode}: World Bank gives ${realPPPMultiplier.toFixed(3)}x, static is ${PRICING_INDEX[regionCode]?.pppMultiplier}x. Keeping the static value.`
+          );
+          continue;
+        }
         // Clamp to reasonable bounds
         realPPPMultiplier = Math.max(0.1, Math.min(2.0, realPPPMultiplier));
       }
