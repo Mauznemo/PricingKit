@@ -1,5 +1,6 @@
 import { googlePlayFetch } from './client';
 import type { ServiceAccountCredentials, InAppProduct, Money } from './types';
+import { getRegionPricing } from './region-pricing';
 
 // Type for regional pricing config
 interface RegionalPricingConfig {
@@ -236,9 +237,35 @@ export async function updateInAppProductPrices(
     }
   }
 
-  purchaseOptions[0].regionalPricingAndAvailabilityConfigs = updatedConfigs;
+  // Google bills some regions in another currency in newer regions versions
+  // (Argentina in USD from 2025/03) and refuses a price in the old one. Ask
+  // Google for the current currencies and send under its version; a price
+  // that is in another currency becomes Google's conversion of the US price.
+  let regionsVersionString = currentProduct.regionsVersion?.version || '2022/02';
+  const usPrice = updatedConfigs.find((c) => c.regionCode === 'US')?.price;
+  if (usPrice?.currencyCode === 'USD') {
+    const pricing = await getRegionPricing(credentials, packageName, {
+      currencyCode: 'USD',
+      units: usPrice.units || '0',
+      nanos: usPrice.nanos,
+    });
+    const refitted: string[] = [];
+    for (const config of updatedConfigs) {
+      const expected = config.regionCode ? pricing.currencies[config.regionCode] : undefined;
+      if (config.regionCode && expected && config.price?.currencyCode !== expected) {
+        config.price = pricing.converted[config.regionCode];
+        refitted.push(config.regionCode);
+      }
+    }
+    if (refitted.length > 0) {
+      console.warn(
+        `[Google] Regions billed in another currency at ${pricing.version}, set to Google's conversion of the US price: ${refitted.join(', ')}`
+      );
+    }
+    regionsVersionString = pricing.version;
+  }
 
-  const regionsVersionString = currentProduct.regionsVersion?.version || '2022/02';
+  purchaseOptions[0].regionalPricingAndAvailabilityConfigs = updatedConfigs;
 
   // Google's discovery doc lists the PATCH path as lowercase `onetimeproducts`,
   // even though every other one-time-product method is camelCase. Don't "fix" this.

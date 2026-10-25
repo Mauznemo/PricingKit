@@ -60,6 +60,7 @@ import {
   type DynamicExchangeRates,
 } from '@/lib/google-play/currency';
 import { useUpdateProductPrices } from '@/hooks/use-products';
+import { useGoogleRegionCurrencies } from '@/hooks/use-google-region-currencies';
 import {
   RegionOverridesSection,
   RegionSearch,
@@ -367,7 +368,10 @@ export function BulkPricingModal({
   }, [allRegions]);
 
   // Extract actual currencies from API (product.prices)
-  // This ensures we use the correct currency that the platform expects for each region
+  // This ensures we use the correct currency that the platform expects for each region.
+  // On Google, what it bills each region in now comes first: existing prices may be
+  // in the currency of an older regions version.
+  const { data: googleCurrencies } = useGoogleRegionCurrencies(open && platform === 'google');
   const actualCurrencies = useMemo(() => {
     const currencies: Record<string, string> = {};
     if (normalizedPrices) {
@@ -377,8 +381,8 @@ export function BulkPricingModal({
         }
       }
     }
-    return currencies;
-  }, [normalizedPrices]);
+    return platform === 'google' ? { ...currencies, ...(googleCurrencies ?? {}) } : currencies;
+  }, [normalizedPrices, googleCurrencies, platform]);
 
   // Calculate preview prices using the user-selected base region + currency.
   const previewPrices = useMemo(() => {
@@ -450,8 +454,13 @@ export function BulkPricingModal({
   }, [previewPrices]);
 
   const overrideRegions = useMemo(
-    () => allRegions.map((r) => ({ code: r.code, name: r.name, currency: r.currency })),
-    [allRegions]
+    () =>
+      allRegions.map((r) => ({
+        code: r.code,
+        name: r.name,
+        currency: actualCurrencies[r.code] ?? r.currency,
+      })),
+    [allRegions, actualCurrencies]
   );
 
   // Get current price for a region

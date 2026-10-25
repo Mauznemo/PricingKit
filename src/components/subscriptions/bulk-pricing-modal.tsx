@@ -56,6 +56,7 @@ import {
   type DynamicExchangeRates,
 } from '@/lib/google-play/currency';
 import { useUpdateBasePlanPrices } from '@/hooks/use-subscriptions';
+import { useGoogleRegionCurrencies } from '@/hooks/use-google-region-currencies';
 import {
   RegionOverridesSection,
   RegionSearch,
@@ -225,7 +226,9 @@ export function SubscriptionBulkPricingModal({
     return allRegions.map((r) => r.code);
   }, [allRegions]);
 
-  // Extract actual currencies from normalized prices
+  // The currency of each region: what Google bills it in now first, then the
+  // currency of its existing price (which may be from an older regions version)
+  const { data: googleCurrencies } = useGoogleRegionCurrencies(open);
   const actualCurrencies = useMemo(() => {
     const currencies: Record<string, string> = {};
     for (const [regionCode, money] of Object.entries(normalizedPrices)) {
@@ -233,8 +236,13 @@ export function SubscriptionBulkPricingModal({
         currencies[regionCode] = money.currencyCode;
       }
     }
-    return currencies;
-  }, [normalizedPrices]);
+    return { ...currencies, ...(googleCurrencies ?? {}) };
+  }, [normalizedPrices, googleCurrencies]);
+
+  const overrideRegions = useMemo(
+    () => allRegions.map((r) => ({ ...r, currency: actualCurrencies[r.code] ?? r.currency })),
+    [allRegions, actualCurrencies]
+  );
 
   // Currency derived from selected base region.
   const baseCurrency = useMemo(() => {
@@ -804,7 +812,7 @@ export function SubscriptionBulkPricingModal({
 
           {/* Manual prices */}
           <RegionOverridesSection
-            regions={allRegions}
+            regions={overrideRegions}
             overrides={overrides}
             onChange={setOverrides}
             calculated={strategyPrices}
