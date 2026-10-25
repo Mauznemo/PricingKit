@@ -712,6 +712,18 @@ export function BulkPricingModal({
       }
     });
 
+    // Apple replaces the whole price schedule of an in-app purchase: a region
+    // left out falls back to Apple's automatic price. So every region that is
+    // not updated is sent again with the price it has now.
+    if (platform === 'apple') {
+      for (const region of allRegions) {
+        const current = getCurrentPrice(region.code);
+        if (!prices[region.code] && current) {
+          prices[region.code] = current;
+        }
+      }
+    }
+
     if (Object.keys(prices).length === 0) {
       toast.error('No prices selected to update');
       return;
@@ -1397,7 +1409,7 @@ export function BulkPricingModal({
                   Review the updates before applying them to {selectedRegions.size} regions.
                   {platform === 'apple' && (
                     <div className="mt-2 text-amber-600 dark:text-amber-500 font-medium italic">
-                      Note: For Apple Products, any regions NOT selected will revert to automatic pricing.
+                      Regions that are not updated keep their current price (they are sent to Apple again unchanged, as Apple replaces the whole price list).
                     </div>
                   )}
                 </div>
