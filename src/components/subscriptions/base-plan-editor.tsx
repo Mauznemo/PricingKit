@@ -49,6 +49,8 @@ import {
   useDeleteBasePlanRegionPrice,
 } from '@/hooks/use-subscriptions';
 import { SubscriptionBulkPricingModal } from './bulk-pricing-modal';
+import { DownloadPricesButton } from '@/components/pricing/download-prices-button';
+import { fromGooglePrices, websitePriceFileName } from '@/lib/website-prices';
 
 // Convert ISO 8601 duration to human-readable format
 function formatBillingPeriod(duration: string): string {
@@ -162,6 +164,14 @@ function BasePlanPricingSection({
           </Badge>
         </div>
         <div className="flex items-center gap-2">
+          <DownloadPricesButton
+            prices={fromGooglePrices(
+              Object.fromEntries(
+                (basePlan.regionalConfigs || []).map((config) => [config.regionCode, config.price])
+              )
+            )}
+            fileName={websitePriceFileName(`google-${subscription.productId}-${basePlan.basePlanId}`)}
+          />
           <Button
             variant="outline"
             size="sm"

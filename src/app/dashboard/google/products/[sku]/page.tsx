@@ -13,6 +13,8 @@ import { Header } from '@/components/layout';
 import { PricingEditor } from '@/components/products/pricing-editor';
 import { formatMoney } from '@/lib/google-play/types';
 import type { ProductResponse } from '@/types/api';
+import { DownloadPricesButton } from '@/components/pricing/download-prices-button';
+import { fromGooglePrices, websitePriceFileName } from '@/lib/website-prices';
 
 export default function GoogleProductDetailPage({
   params,
@@ -75,6 +77,12 @@ export default function GoogleProductDetailPage({
               </>
             )}
           </div>
+          {product && (
+            <DownloadPricesButton
+              prices={fromGooglePrices(product.prices || {})}
+              fileName={websitePriceFileName(`google-${product.sku}`)}
+            />
+          )}
         </div>
 
         {isLoading ? (

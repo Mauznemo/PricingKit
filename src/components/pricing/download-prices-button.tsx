@@ -9,13 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { AppleProductPrice } from '@/lib/apple-connect/types';
-import { downloadJson, toWebsitePrices } from '@/lib/website-prices';
+import { downloadJson, toWebsitePrices, type PriceLike } from '@/lib/website-prices';
 
 interface DownloadPricesButtonProps {
-  prices: Record<string, AppleProductPrice> | undefined;
+  prices: Record<string, PriceLike> | undefined;
   /** Prices that take effect later. With some, the button asks which to save. */
-  scheduledPrices?: Record<string, AppleProductPrice>;
+  scheduledPrices?: Record<string, PriceLike>;
   fileName: string;
 }
 

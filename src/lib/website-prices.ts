@@ -11,10 +11,37 @@ export interface WebsitePriceEntry {
 
 export type WebsitePrices = Record<string, WebsitePriceEntry>;
 
-interface PriceLike {
+export interface PriceLike {
   territoryCode: string;
   currency: string;
   customerPrice: string;
+}
+
+interface MoneyLike {
+  currencyCode: string;
+  units: string;
+  nanos?: number;
+}
+
+/** "7.99" for Google's { units: "7", nanos: 990000000 }, without float rounding. */
+export function moneyToPriceString(money: MoneyLike): string {
+  const nanos = money.nanos ?? 0;
+  if (nanos === 0) return money.units || '0';
+  const fraction = String(Math.abs(nanos)).padStart(9, '0').replace(/0+$/, '');
+  return `${money.units || '0'}.${fraction}`;
+}
+
+/** Google Play prices by region code, in the shape of App Store Connect's. */
+export function fromGooglePrices(prices: Record<string, MoneyLike>): Record<string, PriceLike> {
+  const result: Record<string, PriceLike> = {};
+  for (const [regionCode, money] of Object.entries(prices)) {
+    result[regionCode] = {
+      territoryCode: regionCode,
+      currency: money.currencyCode,
+      customerPrice: moneyToPriceString(money),
+    };
+  }
+  return result;
 }
 
 /**
