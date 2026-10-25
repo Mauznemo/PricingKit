@@ -11,7 +11,7 @@ import type {
   AppleSubscriptionPricePoint,
   AppleTerritory,
 } from './types';
-import { appleApiRequest, getAppIdForBundleId } from './client';
+import { AppleApiError, appleApiRequest, getAppIdForBundleId } from './client';
 import { alpha3ToAlpha2 } from './territories';
 
 // List all subscription groups for an app
@@ -568,6 +568,52 @@ export async function getSubscriptionPricePoints(
   } catch {
     return [];
   }
+}
+
+/**
+ * The territories a subscription can be sold in (alpha-3), read from its
+ * availability. Apple refuses a price for any other territory
+ * (ENTITY_ERROR.RELATIONSHIP.UNSUPPORTED_TERRITORY). Null when the
+ * subscription has no availability at all yet.
+ */
+export async function getSubscriptionAvailableTerritories(
+  credentials: AppleConnectCredentials,
+  subscriptionId: string
+): Promise<Set<string> | null> {
+  let availabilityId: string | undefined;
+  try {
+    const response = await appleApiRequest<{ data?: { id: string } | null }>(
+      credentials,
+      `/subscriptions/${subscriptionId}/subscriptionAvailability`
+    );
+    availabilityId = response.data?.id;
+  } catch (error) {
+    if (error instanceof AppleApiError && error.statusCode === 404) return null;
+    throw error;
+  }
+  if (!availabilityId) return null;
+
+  const territories = new Set<string>();
+  let nextUrl: string | null =
+    `/subscriptionAvailabilities/${availabilityId}/availableTerritories?limit=200`;
+  for (let page = 0; nextUrl && page < 20; page++) {
+    const endpoint: string = nextUrl.startsWith('http')
+      ? (() => {
+          const parsed = new URL(nextUrl);
+          return parsed.pathname.replace('/v1', '') + parsed.search;
+        })()
+      : nextUrl;
+    const response: { data: Array<{ id: string }>; links?: { next?: string } } =
+      await appleApiRequest(credentials, endpoint);
+    for (const territory of response.data) territories.add(territory.id);
+    nextUrl = response.links?.next ?? null;
+  }
+  return territories;
+}
+
+/** Whether Apple refused a price because the subscription is not sold in its territory. */
+export function isUnsupportedTerritoryError(error: unknown): boolean {
+  return error instanceof AppleApiError && error.code === 'ENTITY_ERROR.RELATIONSHIP.UNSUPPORTED_TERRITORY';
 }
 
 // Update subscription price

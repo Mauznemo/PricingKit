@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAppleAuthFromCookies } from '../../../../auth/route';
 import {
   getSubscriptionPricePoints,
+  getSubscriptionAvailableTerritories,
   AppleApiError,
 } from '@/lib/apple-connect';
 import { alpha2ToAlpha3 } from '@/lib/apple-connect/territories';
@@ -18,6 +19,10 @@ const batchSchema = z.object({
     })
   ),
 });
+
+function appleDetail(error: Error): string {
+  return error instanceof AppleApiError ? error.detail : error.message;
+}
 
 // POST /api/apple/subscriptions/[id]/price-points/batch
 // Resolves the closest Apple price point for each territory server-side
@@ -74,8 +79,32 @@ export async function POST(
         const resolved: Record<string, { pricePointId: string; tierPrice: number }> = {};
         const skipped: string[] = [];
 
+        // Apple only takes prices for the territories the subscription is sold in,
+        // so the others are skipped before their price points are looked up
+        let available: Set<string> | null | undefined;
+        try {
+          available = await getSubscriptionAvailableTerritories(credentials, subscriptionId);
+        } catch (error) {
+          // Unknown: look everything up and let Apple decide per territory
+          console.warn('Could not read the subscription availability:', error);
+        }
+        if (available === null || available?.size === 0) {
+          writer.error(
+            'This subscription is not available in any country yet. In App Store Connect, open the subscription, set its availability to the countries it should be sold in, then try again.'
+          );
+          return;
+        }
+        const availableEntries = entries.filter(([territoryCode]) => {
+          const alpha3 = alpha2ToAlpha3(territoryCode) || territoryCode;
+          if (available && !available.has(alpha3)) {
+            skipped.push(territoryCode);
+            return false;
+          }
+          return true;
+        });
+
         // Build tasks — one per territory
-        const tasks = entries.map(
+        const tasks = availableEntries.map(
           ([territoryCode, { targetPrice, currency }]) =>
             async () => {
               const alpha3 = alpha2ToAlpha3(territoryCode) || territoryCode;
@@ -126,7 +155,7 @@ export async function POST(
 
         if (error instanceof RateLimitError) {
           writer.error(
-            `Failed to resolve price points: ${error.successCount} of ${error.totalCount} territories succeeded before failure`,
+            `Failed to resolve price points (${error.successCount} of ${error.totalCount} done): ${appleDetail(error.originalError)}`,
             error.successCount,
             error.totalCount
           );

@@ -6,6 +6,7 @@ import {
   getSubscriptionById,
   getSubscriptionPrices,
   updateSubscriptionPrice,
+  isUnsupportedTerritoryError,
   deleteSubscriptionPrice,
   AppleApiError,
 } from '@/lib/apple-connect';
@@ -190,17 +191,26 @@ export async function PATCH(
       }
     }
 
-    // Create task functions (not promises) for rate-limited execution
+    // Create task functions (not promises) for rate-limited execution.
+    // A territory the subscription is not sold in is skipped, not fatal.
+    const unsupported: string[] = [];
     const createTasks = priceEntries.map(
       ([territoryCode, { pricePointId, startDate }]) =>
-        () => updateSubscriptionPrice(
-          auth.credentials,
-          subscription.id,
-          pricePointId,
-          territoryCode,
-          startDate,
-          preserveCurrentPrice
-        )
+        async () => {
+          try {
+            await updateSubscriptionPrice(
+              auth.credentials,
+              subscription.id,
+              pricePointId,
+              territoryCode,
+              startDate,
+              preserveCurrentPrice
+            );
+          } catch (error) {
+            if (!isUnsupportedTerritoryError(error)) throw error;
+            unsupported.push(territoryCode);
+          }
+        }
     );
 
     // Stream progress back to the client
@@ -243,16 +253,25 @@ export async function PATCH(
             : undefined;
         }
 
+        if (unsupported.length === priceEntries.length) {
+          writer.error(
+            'Apple refused every region: the subscription is not available in them. Set its availability in App Store Connect, then try again.'
+          );
+          return;
+        }
+
         writer.done({
           success: true,
           subscription: updatedSubscription,
+          skipped: unsupported,
         });
       } catch (error) {
         console.error('Error updating Apple subscription:', error);
 
         if (error instanceof RateLimitError) {
+          const original = error.originalError;
           writer.error(
-            `Failed to update prices: ${error.successCount} of ${error.totalCount} regions succeeded before failure`,
+            `Failed to update prices (${error.successCount} of ${error.totalCount} saved): ${original instanceof AppleApiError ? original.detail : original.message}`,
             error.successCount,
             error.totalCount
           );

@@ -682,15 +682,20 @@ export function AppleSubscriptionBulkPricingModal({
         };
       }
 
-      await updateMutation.mutateAsync({
+      const updateResult = (await updateMutation.mutateAsync({
         subscriptionId: subscription.id,
         prices,
         preserveCurrentPrice,
-      });
+      })) as { skipped?: string[] } | undefined;
 
-      const successCount = Object.keys(resolved).length;
-      if (skipCount > 0) {
-        toast.success(`Updated ${successCount} regions (${skipCount} skipped)`);
+      // Regions Apple refused because the subscription is not sold there
+      const unsupportedCount = updateResult?.skipped?.length ?? 0;
+      const successCount = Object.keys(resolved).length - unsupportedCount;
+      const totalSkipped = skipCount + unsupportedCount;
+      if (totalSkipped > 0) {
+        toast.success(
+          `Updated ${successCount} regions (${totalSkipped} skipped: not available or no price points)`
+        );
       } else {
         toast.success(`Updated prices for ${successCount} regions`);
       }

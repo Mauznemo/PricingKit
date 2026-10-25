@@ -61,6 +61,8 @@ export {
   getSubscriptionById,
   getSubscriptionPrices,
   getSubscriptionPricePoints,
+  getSubscriptionAvailableTerritories,
+  isUnsupportedTerritoryError,
   updateSubscriptionPrice,
   deleteSubscriptionPrice,
   formatSubscriptionPeriod,
