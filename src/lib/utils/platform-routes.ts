@@ -45,8 +45,10 @@ export function switchPlatformRoute(pathname: string, toPlatform: Platform): str
   // Match /dashboard/google/... or /dashboard/apple/...
   const match = pathname.match(/^\/dashboard\/(google|apple)(\/.*)?$/);
   if (match) {
-    const subPath = match[2] || '';
-    return `/dashboard/${toPlatform}${subPath}`;
+    // Keep the section (/products, /subscriptions) but not an item ID in it:
+    // a product's ID on one store means nothing on the other
+    const section = (match[2] || '').split('/').slice(0, 2).join('/');
+    return `/dashboard/${toPlatform}${section}`;
   }
   // If not a platform-specific route, just go to platform root
   return getPlatformRoute(toPlatform);
