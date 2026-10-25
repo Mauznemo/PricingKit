@@ -56,6 +56,19 @@ npm start
 npm test
 ```
 
+### Self-hosting with Docker
+
+`docker-compose.yml` builds the app as a plain Node server (Next.js standalone output) and serves it on port 3000. Set `ENCRYPTION_KEY` (for example in a `.env` file next to it) and keep it the same across deploys, or every saved login stops working:
+
+```bash
+echo "ENCRYPTION_KEY=$(openssl rand -base64 48)" > .env
+docker compose up -d --build
+```
+
+On Coolify, pick the Docker Compose build pack for the repository and set `ENCRYPTION_KEY` in its environment variables.
+
+Cookies are marked secure only when the request came over HTTPS (directly or through a proxy that sets `X-Forwarded-Proto`), so the app also works over plain HTTP on a home network. `COOKIE_SECURE=true` or `false` overrides that.
+
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router) with TypeScript

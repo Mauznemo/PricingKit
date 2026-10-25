@@ -1,9 +1,16 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-initOpenNextCloudflareForDev();
+// STANDALONE=1 builds a plain Node server for Docker (see Dockerfile), which
+// needs neither the Cloudflare dev context nor OpenNext.
+const standalone = process.env.STANDALONE === '1';
+
+if (!standalone) {
+  initOpenNextCloudflareForDev();
+}
 
 const nextConfig: NextConfig = {
+  ...(standalone ? { output: 'standalone' as const } : {}),
   async headers() {
     return [
       {

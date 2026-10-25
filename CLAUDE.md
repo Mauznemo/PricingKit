@@ -90,6 +90,10 @@ OPEN_EXCHANGE_RATES_APP_ID  # API key for currency conversion
 COOKIE_SECURE            # true|false, default: Secure only for HTTPS requests
 ```
 
+## Deploying
+- Cloudflare: `npm run deploy` (OpenNext)
+- Docker / Coolify: `Dockerfile` + `docker-compose.yml`, built with `STANDALONE=1` (Next.js standalone output, skips the Cloudflare dev context in `next.config.ts`)
+
 ## Path Alias
 
 TypeScript path alias: `@/*` maps to `src/*`

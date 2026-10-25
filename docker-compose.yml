@@ -1,0 +1,16 @@
+services:
+  pricingkit:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Encrypts the store credentials inside the session cookies. Keep it the
+      # same across deploys, or every saved login stops working.
+      # Generate one with: openssl rand -base64 48
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY to a long random string}
+      # Optional: Open Exchange Rates key, so it need not be entered in the app
+      OPEN_EXCHANGE_RATES_APP_ID: ${OPEN_EXCHANGE_RATES_APP_ID:-}
+      # Optional: true or false. Unset, cookies are marked secure only when
+      # the request came over HTTPS, so plain HTTP on the home network works.
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
