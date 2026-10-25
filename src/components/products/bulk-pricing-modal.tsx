@@ -374,6 +374,15 @@ export function BulkPricingModal({
   const { data: googleCurrencies } = useGoogleRegionCurrencies(open && platform === 'google');
   const actualCurrencies = useMemo(() => {
     const currencies: Record<string, string> = {};
+    // On Apple every territory starts with the currency Apple bills it in. Without
+    // this, a product with no prices yet fell back to the local currencies of the
+    // Google list (CRC for Costa Rica, billed in USD by Apple), and the price
+    // points closest to those numbers were Apple's top prices.
+    if (platform === 'apple') {
+      for (const region of allRegions) {
+        currencies[region.code] = region.currency;
+      }
+    }
     if (normalizedPrices) {
       for (const [regionCode, money] of Object.entries(normalizedPrices)) {
         if (money.currencyCode) {
@@ -382,7 +391,7 @@ export function BulkPricingModal({
       }
     }
     return platform === 'google' ? { ...currencies, ...(googleCurrencies ?? {}) } : currencies;
-  }, [normalizedPrices, googleCurrencies, platform]);
+  }, [normalizedPrices, googleCurrencies, platform, allRegions]);
 
   // Calculate preview prices using the user-selected base region + currency.
   const previewPrices = useMemo(() => {
