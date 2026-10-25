@@ -60,6 +60,12 @@ import {
   type DynamicExchangeRates,
 } from '@/lib/google-play/currency';
 import { useUpdateAppleSubscriptionPrices, useResolveAppleSubscriptionPricePoints } from '@/hooks/use-subscriptions';
+import {
+  RegionOverridesSection,
+  RegionSearch,
+  matchesRegionQuery,
+  useRegionOverrides,
+} from '@/components/pricing/region-overrides';
 
 // Format price with currency
 function formatPrice(price: string | number, currency: string): string {
@@ -143,6 +149,8 @@ interface PreviewPrice {
   noTierData: boolean; // True if no tier data available for this currency
   multiplier: number; // Pricing multiplier applied to base
   multiplierSource?: 'world-bank' | 'big-mac' | 'netflix' | 'static' | 'custom' | 'direct';
+  isOverride: boolean; // Price set by hand in "Manual prices"
+  strategyPrice: number; // What the strategy alone gives (its closest tier)
 }
 
 export function AppleSubscriptionBulkPricingModal({
@@ -184,6 +192,11 @@ export function AppleSubscriptionBulkPricingModal({
   // Exchange rates from Open Exchange Rates API
   const [exchangeRates, setExchangeRates] = useState<DynamicExchangeRates | null>(null);
   const [exchangeRatesLoading, setExchangeRatesLoading] = useState(false);
+
+  const [overrides, setOverrides] = useRegionOverrides(
+    `pricingkit:overrides:apple-subscription:${subscription.productId}`
+  );
+  const [regionQuery, setRegionQuery] = useState('');
 
   const resolveMutation = useResolveAppleSubscriptionPricePoints();
   const updateMutation = useUpdateAppleSubscriptionPrices();
@@ -353,11 +366,16 @@ export function AppleSubscriptionBulkPricingModal({
       const currency = calculated.currencyCode;
 
       // Find closest Apple tier for this price/currency
-      const closestTier = findClosestTierForCurrency(calculated.rawPrice, currency);
+      const strategyTier = findClosestTierForCurrency(calculated.rawPrice, currency);
 
-      const tierPrice = closestTier?.price ?? calculated.rawPrice;
+      // A manual price replaces the strategy's, snapped to its closest tier too
+      const override = overrides[calculated.regionCode];
+      const isOverride = override !== undefined;
+      const closestTier = isOverride ? findClosestTierForCurrency(override, currency) : strategyTier;
+
+      const tierPrice = closestTier?.price ?? (isOverride ? override : calculated.rawPrice);
       const tier = closestTier?.tier ?? null;
-      const tierDifference = closestTier
+      const tierDifference = closestTier && !isOverride
         ? ((closestTier.price - calculated.rawPrice) / calculated.rawPrice) * 100
         : 0;
 
@@ -382,10 +400,22 @@ export function AppleSubscriptionBulkPricingModal({
         noTierData: !closestTier,
         multiplier: calculated.multiplier,
         multiplierSource: calculated.multiplierSource,
+        isOverride,
+        strategyPrice: strategyTier?.price ?? calculated.rawPrice,
       };
     });
-  }, [basePriceNum, targetRegions, strategy, rounding, pppData, actualCurrencies, exchangeRates, subscription.prices, baseRegion, baseCurrency]);
+  }, [basePriceNum, targetRegions, strategy, rounding, pppData, actualCurrencies, exchangeRates, subscription.prices, baseRegion, baseCurrency, overrides]);
 
+  const strategyPrices = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const p of previewPrices) result[p.territoryCode] = p.strategyPrice;
+    return result;
+  }, [previewPrices]);
+
+  const overrideRegions = useMemo(
+    () => allTerritories.map((t) => ({ code: t.alpha2, name: t.name, currency: t.currency })),
+    [allTerritories]
+  );
   const sortedPreviewPrices = useMemo(() => {
     const items = [...previewPrices];
 
@@ -439,6 +469,18 @@ export function AppleSubscriptionBulkPricingModal({
 
     return items;
   }, [previewPrices, sortConfig]);
+
+  const filteredPreviewPrices = useMemo(
+    () =>
+      sortedPreviewPrices.filter((p) =>
+        matchesRegionQuery(regionQuery, {
+          code: `${p.territoryAlpha3} ${p.territoryCode}`,
+          name: p.countryName,
+          currency: p.currency,
+        })
+      ),
+    [sortedPreviewPrices, regionQuery]
+  );
 
   // Auto-select regions where the target price deviates from current price
   useEffect(() => {
@@ -1003,6 +1045,20 @@ export function AppleSubscriptionBulkPricingModal({
               </p>
             </div>
 
+            {/* Manual prices */}
+            <RegionOverridesSection
+              regions={overrideRegions}
+              overrides={overrides}
+              onChange={setOverrides}
+              calculated={strategyPrices}
+              snap={(code, value) => {
+                const currency = actualCurrencies[code];
+                return currency ? findClosestTierForCurrency(value, currency)?.price ?? null : null;
+              }}
+              excludeCode={alpha3ToAlpha2(baseRegion) || baseRegion}
+              onAdd={(code) => setSelectedRegions((prev) => new Set(prev).add(code))}
+            />
+
             {/* Preview Table */}
             {previewPrices.length > 0 && (
               <div className="space-y-2">
@@ -1053,6 +1109,7 @@ export function AppleSubscriptionBulkPricingModal({
                     </Button>
                   </div>
                 </div>
+                <RegionSearch value={regionQuery} onChange={setRegionQuery} />
                 <div className="border rounded-lg">
                   <ScrollArea className="h-72">
                     <TooltipProvider delayDuration={100}>
@@ -1104,7 +1161,7 @@ export function AppleSubscriptionBulkPricingModal({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedPreviewPrices.map((preview) => {
+                        {filteredPreviewPrices.map((preview) => {
                           const isSelected = selectedRegions.has(preview.territoryCode);
                           const rowClassName = preview.noTierData
                             ? 'bg-red-50/50 dark:bg-red-950/20'
@@ -1169,10 +1226,19 @@ export function AppleSubscriptionBulkPricingModal({
                                 ) : (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="cursor-help">
+                                      <span className="cursor-help inline-flex items-center gap-2">
+                                        {preview.isOverride && <Badge variant="secondary">Manual</Badge>}
                                         {formatPrice(preview.tierPrice, preview.currency)}
                                       </span>
                                     </TooltipTrigger>
+                                    {preview.isOverride ? (
+                                      <TooltipContent side="top" className="max-w-xs">
+                                        <p className="text-xs font-medium mb-1">Set by hand</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          The strategy would give {formatPrice(preview.strategyPrice, preview.currency)}.
+                                        </p>
+                                      </TooltipContent>
+                                    ) : (
                                     <TooltipContent side="top" className="max-w-xs">
                                       <p className="text-xs font-medium mb-1">
                                         {baseCurrency} → {preview.currency} Calculation
@@ -1190,6 +1256,7 @@ export function AppleSubscriptionBulkPricingModal({
                                         )}
                                       </div>
                                     </TooltipContent>
+                                    )}
                                   </Tooltip>
                                 )}
                               </TableCell>

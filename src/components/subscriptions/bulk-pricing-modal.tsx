@@ -44,6 +44,7 @@ import {
   GOOGLE_PLAY_REGIONS,
   formatMoney,
   moneyToNumber,
+  parseMoney,
 } from '@/lib/google-play/types';
 import {
   calculateBulkPrices,
@@ -55,6 +56,12 @@ import {
   type DynamicExchangeRates,
 } from '@/lib/google-play/currency';
 import { useUpdateBasePlanPrices } from '@/hooks/use-subscriptions';
+import {
+  RegionOverridesSection,
+  RegionSearch,
+  matchesRegionQuery,
+  useRegionOverrides,
+} from '@/components/pricing/region-overrides';
 
 interface PPPApiResponse {
   success: boolean;
@@ -103,6 +110,10 @@ export function SubscriptionBulkPricingModal({
   const [strategy, setStrategy] = useState<PricingStrategy>('ppp');
   const [rounding, setRounding] = useState<RoundingMode>('nearest-99');
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
+  const [overrides, setOverrides] = useRegionOverrides(
+    `pricingkit:overrides:google-subscription:${subscription.productId}:${basePlan.basePlanId}`
+  );
+  const [regionQuery, setRegionQuery] = useState('');
 
   // PPP data from World Bank API
   const [pppData, setPppData] = useState<DynamicPPPData | null>(null);
@@ -243,7 +254,7 @@ export function SubscriptionBulkPricingModal({
   const previewPrices = useMemo(() => {
     if (basePriceNum < 0) return [];
 
-    return calculateBulkPrices(
+    const calculatedPrices = calculateBulkPrices(
       basePriceNum,
       targetRegions,
       strategy,
@@ -255,7 +266,28 @@ export function SubscriptionBulkPricingModal({
       baseCurrency,
       baseRegion
     );
-  }, [basePriceNum, targetRegions, strategy, rounding, pppData, actualCurrencies, exchangeRates, baseCurrency, baseRegion]);
+
+    // A manual price replaces the strategy's
+    return calculatedPrices.map((calculated) => {
+      const strategyPrice = moneyToNumber(calculated.price);
+      const override = overrides[calculated.regionCode];
+      if (override === undefined) {
+        return { ...calculated, isOverride: false, strategyPrice };
+      }
+      return {
+        ...calculated,
+        price: parseMoney(override, calculated.currencyCode),
+        isOverride: true,
+        strategyPrice,
+      };
+    });
+  }, [basePriceNum, targetRegions, strategy, rounding, pppData, actualCurrencies, exchangeRates, baseCurrency, baseRegion, overrides]);
+
+  const strategyPrices = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const p of previewPrices) result[p.regionCode] = p.strategyPrice;
+    return result;
+  }, [previewPrices]);
 
   // Get current price for a region
   const getCurrentPrice = useCallback((regionCode: string): Money | null => {
@@ -329,6 +361,18 @@ export function SubscriptionBulkPricingModal({
 
     return items;
   }, [previewPrices, sortConfig, allRegions, getCurrentPrice]);
+
+  const filteredPreviewPrices = useMemo(
+    () =>
+      sortedPreviewPrices.filter((p) =>
+        matchesRegionQuery(regionQuery, {
+          code: p.regionCode,
+          name: p.countryName,
+          currency: p.currencyCode,
+        })
+      ),
+    [sortedPreviewPrices, regionQuery]
+  );
 
   // Auto-select regions where the target price deviates from current price
   useEffect(() => {
@@ -758,6 +802,16 @@ export function SubscriptionBulkPricingModal({
             </p>
           </div>
 
+          {/* Manual prices */}
+          <RegionOverridesSection
+            regions={allRegions}
+            overrides={overrides}
+            onChange={setOverrides}
+            calculated={strategyPrices}
+            excludeCode={baseRegion}
+            onAdd={(code) => setSelectedRegions((prev) => new Set(prev).add(code))}
+          />
+
           {/* Preview Table */}
           {previewPrices.length > 0 && (
             <div className="space-y-2">
@@ -801,6 +855,7 @@ export function SubscriptionBulkPricingModal({
                   </Button>
                 </div>
               </div>
+              <RegionSearch value={regionQuery} onChange={setRegionQuery} />
               <div className="border rounded-lg">
                 <ScrollArea className="h-72">
                   <TooltipProvider delayDuration={100}>
@@ -852,7 +907,7 @@ export function SubscriptionBulkPricingModal({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sortedPreviewPrices.map((calculated) => {
+                      {filteredPreviewPrices.map((calculated) => {
                         const currentPrice = getCurrentPrice(
                           calculated.regionCode
                         );
@@ -917,10 +972,19 @@ export function SubscriptionBulkPricingModal({
                             <TableCell className="text-right font-medium">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="cursor-help">
+                                  <span className="cursor-help inline-flex items-center gap-2">
+                                    {calculated.isOverride && <Badge variant="secondary">Manual</Badge>}
                                     {formatMoney(calculated.price)}
                                   </span>
                                 </TooltipTrigger>
+                                {calculated.isOverride ? (
+                                  <TooltipContent side="top" className="max-w-xs">
+                                    <p className="text-xs font-medium mb-1">Set by hand</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      The strategy would give {formatMoney(parseMoney(calculated.strategyPrice, calculated.currencyCode))}.
+                                    </p>
+                                  </TooltipContent>
+                                ) : (
                                 <TooltipContent side="top" className="max-w-xs">
                                   <p className="text-xs font-medium mb-1">
                                     {baseCurrency} → {calculated.currencyCode} Calculation
@@ -935,6 +999,7 @@ export function SubscriptionBulkPricingModal({
                                     <p>{baseCurrency !== calculated.currencyCode ? '5' : '4'}. Target Price: {calculated.rawPrice.toFixed(2)} {calculated.currencyCode}</p>
                                   </div>
                                 </TooltipContent>
+                                )}
                               </Tooltip>
                             </TableCell>
                             <TableCell className="text-right">

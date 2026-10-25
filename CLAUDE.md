@@ -74,6 +74,9 @@ npm test -- <path>   # Run specific test file(s)
 - **PPP multipliers:** Static `PRICING_INDEX` in `/lib/conversion-indexes/ppp.ts`; partial fallback to `FALLBACK_EXCHANGE_RATES` with UI banner when API fails
 - **Apple price tiers:** Large mapping file (`price-tier-data.ts`, 400K+ lines)
 
+### Manual prices and price files
+- **Manual prices:** `RegionOverridesSection` + `useRegionOverrides` (`/components/pricing/region-overrides.tsx`) sit above the regions table of all three bulk modals. An override replaces the strategy's price for its region (snapped to the closest tier on Apple) and is kept in localStorage per product
+
 ### Adding a new pricing strategy
 Touchpoints (all required, in order):
 1. `/lib/conversion-indexes/<name>.ts` — data + `getXMultiplier()` + `DEFAULT_X_MULTIPLIER`

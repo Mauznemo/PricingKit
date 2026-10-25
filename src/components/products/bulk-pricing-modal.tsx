@@ -60,6 +60,12 @@ import {
   type DynamicExchangeRates,
 } from '@/lib/google-play/currency';
 import { useUpdateProductPrices } from '@/hooks/use-products';
+import {
+  RegionOverridesSection,
+  RegionSearch,
+  matchesRegionQuery,
+  useRegionOverrides,
+} from '@/components/pricing/region-overrides';
 
 // Re-exported from shared util for backwards compatibility within this module.
 const getCurrencySymbol = sharedGetCurrencySymbol;
@@ -225,6 +231,10 @@ export function BulkPricingModal({
   const [exchangeRatesFetched, setExchangeRatesFetched] = useState(false);
 
   const updateMutation = useUpdateProductPrices(platform);
+  const [overrides, setOverrides] = useRegionOverrides(
+    `pricingkit:overrides:${platform}-product:${product.sku}`
+  );
+  const [regionQuery, setRegionQuery] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
@@ -404,8 +414,45 @@ export function BulkPricingModal({
       return calculated;
     }) : calculatedPrices;
 
-    return finalPrices;
-  }, [basePriceNum, targetRegions, strategy, rounding, pppData, actualCurrencies, exchangeRates, platform, baseCurrency, baseRegion]);
+    // A manual price replaces the strategy's (on Apple snapped to its closest tier)
+    return finalPrices.map((calculated) => {
+      const strategyPrice = moneyToNumber(calculated.price);
+      const override = overrides[calculated.regionCode];
+      if (override === undefined) {
+        return { ...calculated, isOverride: false, strategyPrice };
+      }
+      if (platform === 'apple') {
+        const tier = findClosestTierForCurrency(override, calculated.currencyCode);
+        const value = tier?.price ?? override;
+        return {
+          ...calculated,
+          price: parseMoney(value, calculated.currencyCode),
+          tierPrice: value,
+          tierId: tier?.tier,
+          tierDifference: 0,
+          isOverride: true,
+          strategyPrice,
+        };
+      }
+      return {
+        ...calculated,
+        price: parseMoney(override, calculated.currencyCode),
+        isOverride: true,
+        strategyPrice,
+      };
+    });
+  }, [basePriceNum, targetRegions, strategy, rounding, pppData, actualCurrencies, exchangeRates, platform, baseCurrency, baseRegion, overrides]);
+
+  const strategyPrices = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const p of previewPrices) result[p.regionCode] = p.strategyPrice;
+    return result;
+  }, [previewPrices]);
+
+  const overrideRegions = useMemo(
+    () => allRegions.map((r) => ({ code: r.code, name: r.name, currency: r.currency })),
+    [allRegions]
+  );
 
   // Get current price for a region
   const getCurrentPrice = useCallback((regionCode: string): Money | null => {
@@ -483,6 +530,18 @@ export function BulkPricingModal({
 
     return items;
   }, [previewPrices, sortConfig, allRegions, getCurrentPrice]);
+
+  const filteredPreviewPrices = useMemo(
+    () =>
+      sortedPreviewPrices.filter((p) =>
+        matchesRegionQuery(regionQuery, {
+          code: p.regionCode,
+          name: p.countryName,
+          currency: p.currencyCode,
+        })
+      ),
+    [sortedPreviewPrices, regionQuery]
+  );
 
   // Auto-select regions where the target price deviates from current price
   useEffect(() => {
@@ -1017,6 +1076,24 @@ export function BulkPricingModal({
             </p>
           </div>
 
+          {/* Manual prices */}
+          <RegionOverridesSection
+            regions={overrideRegions}
+            overrides={overrides}
+            onChange={setOverrides}
+            calculated={strategyPrices}
+            snap={
+              platform === 'apple'
+                ? (code, value) => {
+                    const currency = overrideRegions.find((r) => r.code === code)?.currency;
+                    return currency ? findClosestTierForCurrency(value, currency)?.price ?? null : null;
+                  }
+                : undefined
+            }
+            excludeCode={baseRegion}
+            onAdd={(code) => setSelectedRegions((prev) => new Set(prev).add(code))}
+          />
+
           {/* Preview Table */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -1062,6 +1139,7 @@ export function BulkPricingModal({
                 </Button>
               </div>
             </div>
+            <RegionSearch value={regionQuery} onChange={setRegionQuery} />
             <div className="border rounded-lg">
               <ScrollArea className="h-[300px]">
                 <TooltipProvider delayDuration={100}>
@@ -1120,7 +1198,7 @@ export function BulkPricingModal({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedPreviewPrices.map((calculated) => {
+                    {filteredPreviewPrices.map((calculated) => {
                       const currentPrice = getCurrentPrice(
                         calculated.regionCode
                       );
@@ -1193,10 +1271,19 @@ export function BulkPricingModal({
                           <TableCell className="text-right font-medium">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="cursor-help">
+                                <span className="cursor-help inline-flex items-center gap-2">
+                                  {calculated.isOverride && <Badge variant="secondary">Manual</Badge>}
                                   {formatMoney(calculated.price)}
                                 </span>
                               </TooltipTrigger>
+                              {calculated.isOverride ? (
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs font-medium mb-1">Set by hand</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    The strategy would give {formatMoney(parseMoney(calculated.strategyPrice, calculated.currencyCode))}.
+                                  </p>
+                                </TooltipContent>
+                              ) : (
                               <TooltipContent side="top" className="max-w-xs">
                                 <p className="text-xs font-medium mb-1">
                                   {baseCurrency} → {calculated.currencyCode} Calculation
@@ -1214,6 +1301,7 @@ export function BulkPricingModal({
                                   )}
                                 </div>
                               </TooltipContent>
+                              )}
                             </Tooltip>
                           </TableCell>
                           {platform === 'apple' && (
